@@ -284,7 +284,7 @@
     panel.innerHTML = `
       <div class="tm-panel-header">
         <div class="tm-panel-header-left">
-          <h3>📊 任务进度与质量大盘汇总</h3>
+          <h3>📊 任务进度质量汇总</h3>
           <select class="tm-dapan-select" id="tm-dapan-select">
             <option value="0">📦 统计范围: 历史全量批次</option>
             <option value="1">⏳ 统计范围: 近24h 1天 变动批次</option>
