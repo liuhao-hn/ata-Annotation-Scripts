@@ -8,6 +8,11 @@
 // @grant        none
 // @run-at       document-end
 // ==/UserScript==
+// ╔══════════════════════════════════════════════════════════════╗
+// ║  ⚠️ 本文件为脱敏版本（Portfolio Version）                    ║
+// ║  平台名称、URL、作者信息已做脱敏处理，保留全部工程逻辑。       ║
+// ║  原始代码已在实际生产环境中稳定运行数月。                     ║
+// ╚══════════════════════════════════════════════════════════════╝
 
 (function () {
   'use strict';
@@ -389,8 +394,8 @@
   function ensureUI() {
     const isProjectPage = /\/admin\/projects\/\d+/.test(location.pathname);
     if (isProjectPage && !document.getElementById('tm-progress-btn')) {
-      if (!document.getElementById('tm-artrefine-styles')) {
-        const style = document.createElement('style'); style.id = 'tm-artrefine-styles'; style.textContent = STYLES; document.head.appendChild(style);
+      if (!document.getElementById('tm-datalabelplatform-styles')) {
+        const style = document.createElement('style'); style.id = 'tm-datalabelplatform-styles'; style.textContent = STYLES; document.head.appendChild(style);
       }
       createPanel();
       if (!window.tmCopyBound) {

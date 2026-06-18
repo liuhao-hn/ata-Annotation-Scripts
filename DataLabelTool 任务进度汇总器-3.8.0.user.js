@@ -1,10 +1,10 @@
 // ==UserScript==
-// @name         数据标注平台任务进度汇总器 (开源脱敏版)
-// @namespace    https://github.com/yourusername
+// @name         DataLabelTool 任务进度汇总器
+// @namespace    https://data-label-tool.example.com/
 // @version      3.8.0
-// @description  强制表格列宽对齐，增加拆解表固定显示高度，引入双层 ID 唯一映射架构，杜绝重名合并风险
-// @author       Your Name
-// @match        https://*.your-company-domain.com/project/* // [TODO: 请修改为你们实际的标注系统业务域名]
+// @description  表格列宽对齐，增加拆解表固定显示高度，引入双层 ID 唯一映射架构
+// @author  portfolio
+// @match        https://data-label-tool.example.com/project/*
 // @grant        none
 // @run-at       document-end
 // ==/UserScript==
@@ -14,10 +14,10 @@
 // ║  原始代码已在实际生产环境中稳定运行数月。                     ║
 // ╚══════════════════════════════════════════════════════════════╝
 
+
 (function () {
   'use strict';
 
-  // [TODO: 根据实际后台 API 路径进行调整]
   const CONFIG = {
     LIST_API: '/api/v1/taskflow/task/query/list',
     PROGRESS_API: '/api/v1/taskflow/task/stat_task_progress',
@@ -71,7 +71,7 @@
       if (res.code === 0 && res.data && res.data.items) {
         res.data.items.forEach(item => { dict[String(item.id)] = item.name; });
       }
-    } catch (err) { console.warn("[标注平台] 获取动态字典失败", err); }
+    } catch (err) { console.warn("[DataLabelTool] 获取动态字典失败", err); }
     return dict;
   }
 
@@ -86,15 +86,14 @@
     for (const id of possibleSupIds) {
       if (!id || String(id) === "1" || String(id) === "0") continue;
       const strId = String(id);
-      // [TODO: 如果你们系统有默认的无意义企业占位符，替换掉下面的 'XX公司']
-      if (dynamicDict[strId] && dynamicDict[strId] !== 'XX公司') {
+      if (dynamicDict[strId] && dynamicDict[strId] !== '腾讯公司') {
         return { id: `sup_${strId}`, name: dynamicDict[strId] };
       }
     }
 
     const possibleNames = [lt.supplier_name, taskInfo.supplier_name, taskInfo.company_name];
     for (const name of possibleNames) {
-      if (name && name !== 'XX公司' && name !== '默认团队') {
+      if (name && name !== '腾讯公司' && name !== '默认团队') {
          const validId = possibleSupIds.find(id => id && String(id) !== "1" && String(id) !== "0");
          if (validId) return { id: `sup_${validId}`, name: name };
       }
@@ -133,7 +132,7 @@
           allTasks.push({
             taskId: lt.task_id,
             taskName: lt.task_name,
-            supplierId: supInfo.id,     // 存入唯一 ID
+            supplierId: supInfo.id, // 存入唯一 ID
             supplierName: supInfo.name, // 存入展示名字
             projectTaskId: lt.project_task_id,
           });
@@ -200,7 +199,7 @@
       summary.deliver_reviewing_num += p.deliver_reviewing_num || 0;
       summary.finished_num += p.finished_num || 0;
 
-      // 按照唯一 ID 进行合并
+      // 按照唯一 ID 进行合并！
       if (!supplierSummary[supId]) {
         supplierSummary[supId] = { total_num: 0, labeled_num: 0, wait_label_num: 0, deliver_reviewing_num: 0, finished_num: 0 };
       }
@@ -247,7 +246,7 @@
     .tm-detail-table th:nth-child(4), .tm-detail-table td:nth-child(4) { width: 12%; }
     .tm-detail-table th:nth-child(5), .tm-detail-table td:nth-child(5) { width: 12%; }
     .tm-detail-table th:nth-child(6), .tm-detail-table td:nth-child(6) { width: 12%; }
-    .tm-detail-table th { position: sticky; top: 0; background: #f8f9fa; color: #666; font-weight: 600; border-bottom: 2px solid #e9ecef; z-index: 2; }
+    .tm-detail-table th { position: sticky; top: 0; background: #f8f9fa; color: #666; font-weight: 600; border-bottom: 2px solid #e9ecef; }
 
     .tm-error-row td { color: #ef4444 !important; }
     .tm-copy-btn { margin: 0 20px 16px; padding: 8px; border: 1px solid #ddd; border-radius: 8px; background: #fff; cursor: pointer; font-size: 13px; color: #555; text-align: center; transition: all 0.2s;}
@@ -259,7 +258,7 @@
   let lastResult = null;
 
   function init() {
-    // 暴力清理旧 DOM
+    // 暴力清理旧 DOM，防止幽灵面板
     document.querySelectorAll('.tm-progress-btn, .tm-progress-panel, style[id^="tm-style-"]').forEach(el => el.remove());
 
     const style = document.createElement('style');
@@ -280,7 +279,7 @@
       <div class="tm-summary-grid" style="display:none;"></div>
 
       <div class="tm-detail-section tm-supplier-title" style="display:none;">🏢 团队大盘拆解</div>
-      <div class="tm-detail-table-wrap tm-supplier-wrap" style="display:none; height: 120px; margin-bottom: 10px;">
+      <div class="tm-detail-table-wrap tm-supplier-wrap" style="display:none; min-height: 140px; max-height: 250px; margin-bottom: 10px;">
         <table class="tm-detail-table">
           <thead><tr><th>归属团队名称</th><th>总量</th><th>已标注</th><th>待标注</th><th>审核中</th><th>已完成</th></tr></thead>
           <tbody class="tm-supplier-body"></tbody>
@@ -443,19 +442,6 @@
     }
   }
 
-  // SPA 路由监听防丢机制
-  function ensureUI() {
-    const isProjectPage = /\/project\/\d+/.test(location.pathname);
-    const panelExists = document.querySelector('.tm-progress-panel');
-
-    if (isProjectPage && !panelExists) {
-      init();
-    } else if (!isProjectPage && panelExists) {
-      document.querySelectorAll('.tm-progress-btn, .tm-progress-panel, style[id^="tm-style-"]').forEach(el => el.remove());
-    }
-  }
-
-  ensureUI();
-  setInterval(ensureUI, 1500);
-
+  if (document.readyState === 'complete') init();
+  else window.addEventListener('load', init);
 })();

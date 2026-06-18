@@ -1,10 +1,10 @@
 // ==UserScript==
-// @name         数据标注系统 人员进度与质量汇总器
-// @namespace    https://label.your-company.com/
-// @version      3.0.0
-// @description  引入前端时间滑窗硬过滤机制（可选近1/3/7/14天），强行清洗前期历史坏账污染，还原人员近期真实质量。界面全居中对齐。
-// @author       PM_Author
-// @match        https://label.your-company.com/admin/projects/*
+// @name         DataLabelPlatform 人员进度与质量汇总器 (V3.2.1 锚点对齐版)
+// @namespace    https://data-label-platform.example.com/
+// @version      3.2.1
+// @description  引入前端时间滑窗硬过滤机制。固定全量人员名单锚点，无任务自动用“-”占位对齐，完美无缝支持向协作文档智能粘贴与本地Excel导出。
+// @author  portfolio
+// @match        https://data-label-platform.example.com/*
 // @grant        none
 // @run-at       document-end
 // ==/UserScript==
@@ -13,6 +13,7 @@
 // ║  平台名称、URL、作者信息已做脱敏处理，保留全部工程逻辑。       ║
 // ║  原始代码已在实际生产环境中稳定运行数月。                     ║
 // ╚══════════════════════════════════════════════════════════════╝
+
 
 (function () {
   'use strict';
@@ -78,15 +79,29 @@
     let filteredCount = 0;
 
     for (const item of allBatches) {
-      // 【时间滑窗硬过滤拦截器】
+      const assignee = item.assignee || '未分配';
+
+      // 【核心改动 1】先在全局花名册里注册该人员，保证任何时间窗口下人员名单都不丢失
+      if (!assigneeMap[assignee]) {
+        assigneeMap[assignee] = {
+          assigneeName: assignee,
+          total_num: 0, labeled_num: 0,
+          qa_checking_num: 0, accepting_num: 0,
+          rejected_num: 0, finished_num: 0,
+          qa_correct: 0, qa_total: 0,
+          acc_first_correct: 0, acc_first_total: 0,
+          acc_cum_correct: 0, acc_cum_errors: 0
+        };
+      }
+
+      // 【核心改动 2】在此处进行时间拦截，超期的包直接跳过，只过滤数据，不过滤人员名字
       if (currentTimeWindowDays > 0) {
-        const updateTimeStr = item.updated_at; // 格式: "2026-05-18T11:15:47"
+        const updateTimeStr = item.updated_at;
         if (updateTimeStr) {
           const updateTime = new Date(updateTimeStr).getTime();
           const now = Date.now();
           const milesecondsThreshold = currentTimeWindowDays * 24 * 60 * 60 * 1000;
 
-          // 如果这个包的最后流转更新时间超过了设定的滑窗天数，直接丢弃，不进任何统计
           if (now - updateTime > milesecondsThreshold) {
             filteredCount++;
             continue;
@@ -94,7 +109,6 @@
         }
       }
 
-      const assignee = item.assignee || '未分配';
       const total = item.total_count || 0;
       const completed = item.completed_count || 0;
       const status = item.status || '';
@@ -144,18 +158,6 @@
           } else if (status === 'approved') {
               acc_first_C = total; acc_first_T = total;
           }
-      }
-
-      if (!assigneeMap[assignee]) {
-        assigneeMap[assignee] = {
-          assigneeName: assignee,
-          total_num: 0, labeled_num: 0,
-          qa_checking_num: 0, accepting_num: 0,
-          rejected_num: 0, finished_num: 0,
-          qa_correct: 0, qa_total: 0,
-          acc_first_correct: 0, acc_first_total: 0,
-          acc_cum_correct: 0, acc_cum_errors: 0
-        };
       }
 
       summary.total_num += total; assigneeMap[assignee].total_num += total;
@@ -231,8 +233,12 @@
     .rate-box { display: flex; flex-direction: column; align-items: center; line-height: 1.2; }
     .rate-pct { font-weight: 700; font-size: 13px; }
     .rate-detail { font-size: 10px; color: #888; margin-top: 2px; }
-    .tm-user-copy-btn { margin: 0 20px 16px; padding: 8px; border: 1px solid #ddd; border-radius: 8px; background: #fff; cursor: pointer; font-size: 13px; color: #555; text-align: center; transition: all 0.2s;}
-    .tm-user-copy-btn:hover { background: #f0f0f0; }
+
+    .tm-btn-footer-group { display: flex; gap: 12px; padding: 0 20px 16px; }
+    .tm-user-copy-btn { flex: 1; margin: 0; padding: 10px; border: 1px solid #ddd; border-radius: 8px; background: #fff; cursor: pointer; font-size: 13px; font-weight: 600; color: #555; text-align: center; transition: all 0.2s;}
+    .tm-user-copy-btn:hover { background: #f0f0f0; border-color: #ccc; }
+    #tm-user-export-btn { background: #f0fdf4; color: #16a34a; border-color: #bbf7d0; }
+    #tm-user-export-btn:hover { background: #dcfce7; border-color: #86efac; }
   `;
 
   function injectStyles() {
@@ -282,7 +288,7 @@
       </div>
       <div class="tm-user-status" id="tm-user-status">点击按钮开始汇总</div>
       <div class="tm-user-grid" id="tm-user-summary" style="display:none;"></div>
-      <div class="tm-user-section" id="tm-user-detail-title" style="display:none;">📋 成员明细 (先看进度，再看质量)</div>
+      <div class="tm-user-section" id="tm-user-detail-title" style="display:none;">📋 成员明细 (无任务人员以 "-" 占位，保持行列对齐)</div>
       <div class="tm-user-table-wrap" id="tm-user-detail-wrap" style="display:none;">
         <table class="tm-user-table">
           <thead>
@@ -302,7 +308,10 @@
           <tbody id="tm-user-detail-body"></tbody>
         </table>
       </div>
-      <button class="tm-user-copy-btn" id="tm-user-copy-btn" style="display:none;">📋 复制人员绩效结果</button>
+      <div class="tm-btn-footer-group">
+        <button class="tm-user-copy-btn" id="tm-user-copy-btn" style="display:none;">📋 一键复制绩效结果 (智能粘贴)</button>
+        <button class="tm-user-copy-btn" id="tm-user-export-btn" style="display:none;">📊 导出本地 Excel 账本 (.xls)</button>
+      </div>
     `;
     document.body.appendChild(panel);
 
@@ -328,8 +337,10 @@
     const detailWrap = document.getElementById('tm-user-detail-wrap');
     const detailBody = document.getElementById('tm-user-detail-body');
     const copyBtn = document.getElementById('tm-user-copy-btn');
+    const exportBtn = document.getElementById('tm-user-export-btn');
 
-    summaryEl.style.display = 'none'; detailTitle.style.display = 'none'; detailWrap.style.display = 'none'; copyBtn.style.display = 'none';
+    summaryEl.style.display = 'none'; detailTitle.style.display = 'none'; detailWrap.style.display = 'none';
+    copyBtn.style.display = 'none'; exportBtn.style.display = 'none';
     detailBody.innerHTML = '';
 
     try {
@@ -339,18 +350,27 @@
           const tr = document.createElement('tr');
           const nameStyle = p.assigneeName === '未分配' ? 'color: #9ca3af; font-style: italic;' : '';
 
+          // 【核心改动 3】检查当前人员在此时间窗内是否有总量，没有的话基础数据也全部渲染为 "-"
+          const isZero = p.total_num === 0;
+          const fTotal = isZero ? '<span style="color:#aaa;">-</span>' : formatNum(p.total_num);
+          const fLabeled = isZero ? '<span style="color:#aaa;">-</span>' : formatNum(p.labeled_num);
+          const fQaCheck = isZero ? '<span style="color:#aaa;">-</span>' : formatNum(p.qa_checking_num);
+          const fAccept = isZero ? '<span style="color:#aaa;">-</span>' : `<span style="color:#8b5cf6; font-weight: 600;">${formatNum(p.accepting_num)}</span>`;
+          const fReject = isZero ? '<span style="color:#aaa;">-</span>' : `<span style="color: #dc2626; font-weight: 600;">${formatNum(p.rejected_num)}</span>`;
+          const fFinish = isZero ? '<span style="color:#aaa;">-</span>' : `<span style="color: #10b981; font-weight: 600;">${formatNum(p.finished_num)}</span>`;
+
           const qaCell = genRateCell(p.qa_correct, p.qa_total, '#3b82f6');
           const accFirstCell = genRateCell(p.acc_first_correct, p.acc_first_total, '#059669');
           const accCumCell = genRateCell(p.acc_cum_correct, p.acc_cum_total, '#d97706');
 
           tr.innerHTML = `
             <td style="${nameStyle}">${p.assigneeName}</td>
-            <td>${formatNum(p.total_num)}</td>
-            <td>${formatNum(p.labeled_num)}</td>
-            <td>${formatNum(p.qa_checking_num)}</td>
-            <td style="color:#8b5cf6; font-weight: 600;">${formatNum(p.accepting_num)}</td>
-            <td style="color: #dc2626; font-weight: 600;">${formatNum(p.rejected_num)}</td>
-            <td style="color: #10b981; font-weight: 600;">${formatNum(p.finished_num)}</td>
+            <td>${fTotal}</td>
+            <td>${fLabeled}</td>
+            <td>${fQaCheck}</td>
+            <td>${fAccept}</td>
+            <td>${fReject}</td>
+            <td>${fFinish}</td>
             ${qaCell}
             ${accFirstCell}
             ${accCumCell}
@@ -381,45 +401,77 @@
       `;
 
       let labelText = currentTimeWindowDays === 1 ? '当天实时' : `近 ${currentTimeWindowDays} 天`;
-      let filterTip = currentTimeWindowDays > 0 ? ` (已过滤历史过期包 ${result.filteredCount} 个)` : '';
+      let filterTip = currentTimeWindowDays > 0 ? ` (已隐藏远期无效包 ${result.filteredCount} 个)` : '';
       statusEl.textContent = `✅ 汇总完成！当前统计窗口: ${currentTimeWindowDays === 0 ? '全量历史' : labelText}${filterTip}`;
-      summaryEl.style.display = 'grid'; detailTitle.style.display = 'block'; detailWrap.style.display = 'block'; copyBtn.style.display = 'block';
+      summaryEl.style.display = 'grid'; detailTitle.style.display = 'block'; detailWrap.style.display = 'block';
+      copyBtn.style.display = 'block'; exportBtn.style.display = 'block';
     } catch (err) {
       statusEl.textContent = `❌ 错误: ${err.message}`;
     }
   }
 
-  function setupCopy() {
-    if (window.tmUserCopyBound) return;
-    window.tmUserCopyBound = true;
+  function setupActionEvents() {
+    if (window.tmUserEventsBound) return;
+    window.tmUserEventsBound = true;
+
     document.addEventListener('click', (e) => {
       if (e.target.id === 'tm-user-copy-btn') {
         if (!lastResult) return;
-        const s = lastResult.summary;
-        const globalQa = s.qa_total > 0 ? (s.qa_correct / s.qa_total * 100).toFixed(1) + '%' : '-';
-        const globalAccFirst = s.acc_first_total > 0 ? (s.acc_first_correct / s.acc_first_total * 100).toFixed(1) + '%' : '-';
-        const globalAccCum = s.acc_cum_total > 0 ? (s.acc_cum_correct / s.acc_cum_total * 100).toFixed(1) + '%' : '-';
 
-        let rangeText = currentTimeWindowDays === 0 ? "历史全量" : (currentTimeWindowDays === 1 ? "当天实时" : `近 ${currentTimeWindowDays} 天新数据`);
-        let text = `人员绩效结果 (时间窗口: ${rangeText})\n————————————————\n`;
-        text += `🛡️总体质检通过率: ${globalQa}\n`;
-        text += `🎯总体验收(首次验收通过率): ${globalAccFirst}\n`;
-        text += `🎯总体验收(累积折损通过率): ${globalAccCum}\n————————————————\n`;
+        let matrixText = "标注员\t总量\t已标注\t质检中\t验收中\t已驳回\t已完成\t质检通过率\t首次验收通过率\t累积折损通过率\n";
 
         const rows = document.querySelectorAll('#tm-user-detail-body tr');
         rows.forEach(row => {
           const cells = row.querySelectorAll('td');
-          if(cells[0].innerText !== '未分配') {
-              const qaText = cells[7].innerText.replace(/\n/g, '');
-              const accFirstText = cells[8].innerText.replace(/\n/g, '');
-              const accCumText = cells[9].innerText.replace(/\n/g, '');
-              text += `- ${cells[0].innerText}: 认领${cells[1].innerText} | 质检中${cells[3].innerText} | 验收中${cells[4].innerText} | 完${cells[6].innerText} | 质检率${qaText} | 首验${accFirstText} | 累积${accCumText}\n`;
+          if (cells.length > 0 && cells[0].innerText !== '未分配') {
+            let rowData = [];
+            cells.forEach((cell, index) => {
+              let text = cell.innerText.replace(/\n/g, ' ');
+              rowData.push(text);
+            });
+            matrixText += rowData.join('\t') + '\n';
           }
         });
-        navigator.clipboard.writeText(text).then(() => {
-          e.target.textContent = '✅ 已复制过滤后的绩效战报！';
-          setTimeout(() => { e.target.textContent = '📋 复制人员绩效结果'; }, 2000);
+
+        navigator.clipboard.writeText(matrixText).then(() => {
+          e.target.textContent = '✅ 矩阵格式已就绪，可去云文档直接 Ctrl+V！';
+          setTimeout(() => { e.target.textContent = '📋 一键复制绩效结果 (智能粘贴)'; }, 2500);
         });
+      }
+
+      if (e.target.id === 'tm-user-export-btn') {
+        try {
+          const originalTable = document.querySelector('.tm-user-table');
+          if (!originalTable) return;
+
+          const cloneTable = originalTable.cloneNode(true);
+          cloneTable.querySelectorAll('.rate-box').forEach(box => {
+            const pct = box.querySelector('.rate-pct')?.innerText || '-';
+            const detail = box.querySelector('.rate-detail')?.innerText || '';
+            box.parentElement.innerHTML = `${pct} ${detail}`;
+          });
+
+          const timeLabels = { 0: "历史全量", 1: "当天实时", 3: "近3天", 7: "近7天周报", 14: "近14天" };
+          const curLabel = timeLabels[currentTimeWindowDays] || "绩效战报";
+
+          const worksheetHtml = `
+            <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+            <head><meta charset="utf-8"></head>
+            <body>${cloneTable.outerHTML}</body>
+            </html>
+          `;
+
+          const blob = new Blob([worksheetHtml], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+          const downloadUrl = URL.createObjectURL(blob);
+          const anchor = document.createElement('a');
+
+          anchor.href = downloadUrl;
+          anchor.download = `标注团队绩效明细表_${curLabel}_${new Date().toLocaleDateString('zh-CN')}.xls`;
+          anchor.click();
+          URL.revokeObjectURL(downloadUrl);
+        } catch (err) {
+          alert('导出失败: ' + err.message);
+        }
       }
     });
   }
@@ -429,7 +481,7 @@
     if (isProjectPage && !document.getElementById('tm-user-progress-btn')) {
       injectStyles();
       createPanel();
-      setupCopy();
+      setupActionEvents();
     } else if (!isProjectPage && document.getElementById('tm-user-progress-btn')) {
       document.querySelectorAll('#tm-user-progress-btn, #tm-user-progress-panel, style[id^="tm-user-styles"]').forEach(el => el.remove());
     }
