@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: userscript 语法校验
+        run: |
+          for f in *.user.js; do
+            echo "检查 $f"
+            node --check "$f"
+          done
+      - name: 脚本数量与命名检查
+        run: |
+          [ "$(ls *.user.js | wc -l)" -ge 16 ] && echo "✓ 16+ 个 userscript"

@@ -1,5 +1,7 @@
 # ata-Annotation-Scripts
 
+![CI](https://github.com/liuhao-hn/ata-Annotation-Scripts/actions/workflows/ci.yml/badge.svg)
+
 数据标注平台进度与人效统计工具箱。A collection of Tampermonkey scripts for Data Annotation Platforms, featuring progress aggregation and QA funnel tracking.
 
 ## 项目概述
